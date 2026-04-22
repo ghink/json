@@ -1,6 +1,6 @@
 //go:build !((amd64 || arm64) && !illumos && !plan9 && !solaris)
 
-package json
+package marshaller
 
 import (
 	"github.com/goccy/go-json"

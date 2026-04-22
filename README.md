@@ -19,7 +19,7 @@ Based on [bytedance/sonic](https://github.com/bytedance/sonic) and [goccy/go-jso
 Default behaviors are mostly consistent with `encoding/json`.
 
  ```go
-import "github.com/ghinknet/json"
+import "go.gh.ink/json"
 
 var data YourSchema
 // Marshal
