@@ -3,6 +3,8 @@
 package marshaller
 
 import (
+	"reflect"
+
 	"github.com/goccy/go-json"
 )
 
@@ -12,4 +14,12 @@ func Marshal(v any) ([]byte, error) {
 
 func Unmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
+}
+
+func Preheat(vt reflect.Type) error {
+	return nil
+}
+
+func PreheatMany(vts []reflect.Type) error {
+	return nil
 }

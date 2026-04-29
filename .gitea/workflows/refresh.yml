@@ -17,6 +17,10 @@ jobs:
         shell: sh
         run: |
           set -eux
+          
+          # Use Tsinghua Source
+          sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.tuna.tsinghua.edu.cn/alpine#g' /etc/apk/repositories
+          apk update
 
           # Install git in Alpine if missing (we prefer installing git over node)
           if ! command -v git >/dev/null 2>&1; then

@@ -3,7 +3,7 @@ module go.gh.ink/json
 go 1.25.0
 
 require (
-	github.com/bytedance/sonic v1.15.0
+	github.com/bytedance/sonic v1.15.1
 	github.com/goccy/go-json v0.10.6
 )
 
