@@ -6,7 +6,7 @@ Based on [bytedance/sonic](https://github.com/bytedance/sonic) and [goccy/go-jso
 
 ## Requirement
 
-- Go: 1.24.1+
+- Go: 1.25.0+
 
 ## Features
 
