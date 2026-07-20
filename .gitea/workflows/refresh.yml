@@ -22,7 +22,7 @@ jobs:
         shell: sh
         run: |
           set -e
-          sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories
+          sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#http://mirrors.98e-1.net/alpine#g' /etc/apk/repositories
           apk update
           apk add --no-cache git ca-certificates curl tar xz
 
@@ -111,7 +111,7 @@ jobs:
               aarch64|arm64) goarch="arm64" ;;
               *) goarch="amd64" ;;
             esac
-            url="https://mirrors.aliyun.com/golang/go${module_go_version}.linux-${goarch}.tar.gz"
+            url="http://mirrors.98e-1.net/golang/go${module_go_version}.linux-${goarch}.tar.gz"
             echo "Downloading: $url"
             curl -fsSL -o /tmp/go.tgz "$url"
             rm -rf /usr/local/go || true
