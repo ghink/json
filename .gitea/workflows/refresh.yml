@@ -50,13 +50,6 @@ jobs:
         run: |
           set -eux
 
-          module=$(awk '/^module /{print $2; exit}' go.mod)
-          echo "Detected module: $module"
-          module_go_version=$(awk '/^go /{print $2; exit}' go.mod || true)
-          if [ -z "$module_go_version" ]; then
-            module_go_version="${{ steps.get_go_version.outputs.go-version }}"
-          fi
-          echo "Using Go version: $module_go_version"
           tag=""
           if [ -n "${GITHUB_REF:-}" ]; then
             tag=${GITHUB_REF#refs/tags/}
@@ -73,6 +66,24 @@ jobs:
             echo "No tag found for this run — nothing to refresh. Exiting."
             exit 0
           fi
+
+          # The repository holds one module per major version: v1.x.x tags
+          # belong to the module at the root, v2.x.x tags to the one under v2/.
+          # A vN.x.x tag carries no subdirectory prefix, so the major version in
+          # the tag is what picks the directory.
+          case "$tag" in
+            v2.*) module_dir="v2" ;;
+            *)    module_dir="." ;;
+          esac
+          echo "Tag $tag maps to module directory: $module_dir"
+
+          module=$(awk '/^module /{print $2; exit}' "$module_dir/go.mod")
+          echo "Detected module: $module"
+          module_go_version=$(awk '/^go /{print $2; exit}' "$module_dir/go.mod" || true)
+          if [ -z "$module_go_version" ]; then
+            module_go_version="${{ steps.get_go_version.outputs.go-version }}"
+          fi
+          echo "Using Go version: $module_go_version"
 
           echo "Refreshing gosumdb for $module@$tag"
           if command -v go >/dev/null 2>&1; then

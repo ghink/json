@@ -1,0 +1,172 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  test:
+    runs-on: node-24-alpine
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install deps (apk)
+        shell: sh
+        run: |
+          set -e
+          sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#http://mirrors.98e-1.net/alpine#g' /etc/apk/repositories
+          apk update
+          # gcc and musl-dev are for -race, which needs cgo.
+          apk add --no-cache git ca-certificates curl tar xz gcc musl-dev
+
+      - name: Install Go
+        shell: sh
+        run: |
+          set -eu
+          # The root module states the floor this library supports; build with
+          # exactly that so anything newer than it fails here rather than in a
+          # user's build.
+          v=$(awk '/^go /{print $2; exit}' go.mod)
+          echo "Go version from go.mod: $v"
+          arch=$(uname -m)
+          case "$arch" in
+            x86_64|amd64) goarch="amd64" ;;
+            aarch64|arm64) goarch="arm64" ;;
+            *) goarch="amd64" ;;
+          esac
+          curl -fsSL -o /tmp/go.tgz "http://mirrors.98e-1.net/golang/go${v}.linux-${goarch}.tar.gz"
+          rm -rf /usr/local/go
+          tar -C /usr/local -xzf /tmp/go.tgz
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+
+      - name: Environment
+        shell: sh
+        run: |
+          set -eux
+          go version
+          go env GOPROXY
+
+      - name: Check formatting
+        shell: sh
+        run: |
+          set -eu
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Check go.mod is tidy
+        shell: sh
+        env:
+          GOPROXY: https://goproxy.cn,direct
+        run: |
+          set -eu
+          go mod tidy -diff
+          (cd v2 && go mod tidy -diff)
+
+      # The library promises encoding/json semantics, and Go 1.27 rebuilt
+      # encoding/json on top of encoding/json/v2 and changed some of its
+      # behaviour. Both toolchains therefore have to pass, and GOTOOLCHAIN
+      # fetches the newer one through the proxy rather than needing a second
+      # tarball.
+      - name: Vet and test, Go from go.mod
+        shell: sh
+        env:
+          GOPROXY: https://goproxy.cn,direct
+        run: |
+          set -eux
+          go vet ./...
+          go test -count=1 ./...
+
+      - name: Vet and test, Go 1.27
+        shell: sh
+        env:
+          GOPROXY: https://goproxy.cn,direct
+          GOTOOLCHAIN: go1.27.0
+        run: |
+          set -eux
+          go vet ./...
+          go test -count=1 ./...
+
+      - name: Vet and test, v2 module
+        shell: sh
+        working-directory: v2
+        env:
+          GOPROXY: https://goproxy.cn,direct
+          # v2/go.mod requires 1.27. Naming it beats relying on the automatic
+          # switch, which a runner with GOTOOLCHAIN=local would refuse to make.
+          GOTOOLCHAIN: go1.27.0
+        run: |
+          set -eux
+          go vet ./...
+          go test -count=1 ./...
+
+      # The race detector needs cgo and a working TSAN runtime, which is not a
+      # given on musl, so it is probed rather than assumed. It is worth having:
+      # the type cache behind Marshal and Unmarshal is a sync.Map read from
+      # every goroutine that encodes anything.
+      - name: Test under the race detector
+        shell: sh
+        env:
+          GOPROXY: https://goproxy.cn,direct
+        run: |
+          set -eu
+          if ! go test -race -run '^$' ./... >/dev/null 2>&1; then
+            echo "::warning::race detector unavailable on this runner, skipping"
+            exit 0
+          fi
+          set -x
+          go test -race -count=1 ./...
+          (cd v2 && GOTOOLCHAIN=go1.27.0 go test -race -count=1 ./...)
+
+      # Cross-compiling only, since the runner cannot execute these. It catches
+      # a build constraint that stops holding on some platform.
+      - name: Cross-compile
+        shell: sh
+        env:
+          GOPROXY: https://goproxy.cn,direct
+        run: |
+          set -eu
+          for target in linux/386 linux/arm64 linux/riscv64 darwin/arm64 windows/amd64 solaris/amd64 plan9/amd64 illumos/amd64 js/wasm; do
+            os=${target%/*}
+            arch=${target#*/}
+            echo "building $target"
+            GOOS=$os GOARCH=$arch go build ./...
+          done
+
+      # The table-driven cases only reach differences someone thought to write
+      # down; every value-dependent one found so far came from here. Short runs
+      # on each push. A finding is printed by the step below rather than kept:
+      # commit it under testdata/fuzz to turn it into a permanent seed.
+      #
+      # No -race: the backend's out-of-bounds reads become fatal under checkptr,
+      # which would kill the fuzzing process rather than report a finding.
+      - name: Fuzz
+        shell: sh
+        env:
+          GOPROXY: https://goproxy.cn,direct
+        run: |
+          set -eu
+          for target in FuzzMarshalConformance FuzzUnmarshalConformance FuzzRoundTrip; do
+            echo "fuzzing $target"
+            go test -run '^$' -fuzz "$target" -fuzztime=30s .
+          done
+
+      # A failing fuzz run writes its input under testdata/fuzz. Printing it
+      # keeps the reproducer in the log, since it is not committed from CI.
+      - name: Show fuzz findings
+        if: failure()
+        shell: sh
+        run: |
+          set -eu
+          if [ -d testdata/fuzz ]; then
+            find testdata/fuzz -type f -print -exec cat {} \;
+          else
+            echo "no fuzz corpus written"
+          fi
