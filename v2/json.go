@@ -32,6 +32,16 @@ func Unmarshal(data []byte, v any, opts ...Options) error {
 	return marshaller.Unmarshal(data, v, opts...)
 }
 
+// MarshalV1 encodes v as JSON with v1 function signature.
+func MarshalV1(v any) ([]byte, error) {
+	return marshaller.Marshal(v)
+}
+
+// UnmarshalV1 decodes JSON into v with v1 function signature.
+func UnmarshalV1(data []byte, v any) error {
+	return marshaller.Unmarshal(data, v)
+}
+
 // Preheat compiles the codec for vt ahead of its first use. It is a no-op on
 // backends that have nothing to compile, which today means all of them.
 //
